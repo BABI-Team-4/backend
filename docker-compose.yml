@@ -1,0 +1,23 @@
+services:
+  mongodb:
+    image: mongo:7.0.7
+    container_name: cover-letter-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    environment:
+      MONGO_INITDB_DATABASE: cover_letter
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: cover-letter-chroma
+    ports:
+      - "8100:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+volumes:
+  mongo_data:
+  chroma_data:
