@@ -1,1 +1,0 @@
-"""Similarity retrieval service placeholder."""
