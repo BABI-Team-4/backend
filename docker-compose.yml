@@ -16,8 +16,7 @@ services:
     ports:
       - "8110:8000"
     volumes:
-      - chroma_data:/chroma/chroma
+      - ../chroma_db:/chroma/chroma
 
 volumes:
   mongo_data:
-  chroma_data:
