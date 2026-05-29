@@ -1,12 +1,12 @@
 """
-AI module integration service.
-Wraps app.ai.advisor.advise() and app.ai.search.retrieve()
-and transforms their outputs to match the API response spec.
+AI service client.
+Calls the ai_process FastAPI server via HTTP.
 """
-import asyncio
+import httpx
 
-from app.ai.advisor import advise
-from app.ai.search import retrieve
+from app.core.config import settings
+
+AI_BASE_URL = settings.ai_process_url
 
 
 async def run_analysis(
@@ -17,10 +17,13 @@ async def run_analysis(
     job_role_name: str = "",
     job_role_id: int | None = None,
 ) -> dict:
-    result = await asyncio.to_thread(
-        advise, draft=draft, question=question, company=company,
-        n_refs=3, min_similarity=0.5,
-    )
+    async with httpx.AsyncClient(timeout=120) as client:
+        res = await client.post(f"{AI_BASE_URL}/advise", json={
+            "draft": draft,
+            "question": question,
+            "company": company,
+        })
+        result = res.json()
 
     pros = result.get("pros", [])
     cons = result.get("cons", [])
@@ -102,9 +105,14 @@ async def run_recommendation(
     company: str = "",
     limit: int = 10,
 ) -> list[dict]:
-    query = f"{question}\n{draft}" if question else draft
-    results = await asyncio.to_thread(retrieve, query, n_results=limit * 3)
+    async with httpx.AsyncClient(timeout=120) as client:
+        res = await client.post(f"{AI_BASE_URL}/retrieve", json={
+            "query": f"{question}\n{draft}" if question else draft,
+            "n_results": limit * 3,
+        })
+        data = res.json()
 
+    results = data.get("results", [])
     company_scores: dict[str, dict] = {}
     for r in results:
         comp = r.get("company", "")

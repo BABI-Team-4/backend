@@ -6,16 +6,8 @@ class Settings(BaseSettings):
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_db_name: str = "cover_letter"
 
-    # ChromaDB
-    chroma_host: str = "localhost"
-    chroma_port: int = 8100
-    chroma_collection_name: str = "cover_letters"
-
-    # OpenAI
-    openai_api_key: str = ""
-
-    # Embedding
-    embedding_model_name: str = "BAAI/bge-m3"
+    # AI Process
+    ai_process_url: str = "http://localhost:8001"
 
     # JWT
     jwt_secret_key: str = "change-me-in-production"
@@ -28,9 +20,6 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     kakao_client_id: str = ""
     kakao_client_secret: str = ""
-
-    # AI module path
-    ai_module_path: str = ""
 
     model_config = {"env_file": ".env"}
 
