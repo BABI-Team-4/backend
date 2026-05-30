@@ -7,25 +7,24 @@ from app.api.deps import get_current_user
 from app.core.responses import AppError, success_response
 from app.db.connections import (
     analyses_collection,
-    chat_messages_collection,
-    chat_sessions_collection,
+    user_essays_collection,
     companies_collection,
     job_roles_collection,
     plans_collection,
     usage_collection,
 )
 from app.schemas.analysis import AnalysisRequest
-from app.services.ai_service import run_analysis
+from app.services.ai_service import run_analysis, run_advise
 
 router = APIRouter(tags=["analysis"])
 
 
 # --- 7-1: Request Analysis ---
 
-@router.post("/chat/sessions/{session_id}/analysis")
+@router.post("/essays/{session_id}/analysis")
 async def create_analysis(session_id: str, body: AnalysisRequest, user: dict = Depends(get_current_user)):
     user_id = str(user["_id"])
-    session = await chat_sessions_collection.find_one({"_id": ObjectId(session_id), "user_id": user_id})
+    session = await user_essays_collection.find_one({"_id": ObjectId(session_id), "user_id": user_id})
     if not session:
         raise AppError("SESSION_NOT_FOUND", "채팅 세션을 찾을 수 없습니다.", 404)
 
@@ -140,49 +139,13 @@ async def get_analysis_result(analysis_id: str, user: dict = Depends(get_current
     return success_response(result)
 
 
-# --- 7-4: Send Analysis to Chat ---
 
-@router.post("/analyses/{analysis_id}/send-to-chat")
-async def send_to_chat(analysis_id: str, user: dict = Depends(get_current_user)):
-    doc = await analyses_collection.find_one({"_id": ObjectId(analysis_id), "user_id": str(user["_id"])})
-    if not doc:
-        raise AppError("NOT_FOUND", "분석 결과를 찾을 수 없습니다.", 404)
-    if doc["status"] != "completed":
-        raise AppError("VALIDATION_ERROR", "분석이 완료되지 않았습니다.")
+# --- Advise ---
 
-    result = doc.get("result", {})
-    scores = result.get("scores", {})
-    summary = result.get("summary", {})
-    overall = scores.get("overall_fit", "N/A")
-
-    company_name = result.get("target_company", {}).get("name", "")
-    job_role_name = result.get("target_job_role", {}).get("name", "")
-
-    content = (
-        f"분석 결과, 현재 자기소개서는 {company_name} {job_role_name} 직무와 "
-        f"{overall}점 수준으로 적합합니다. "
-        f"{summary.get('weakness', '')} "
-        f"{summary.get('strategy', '')}"
-    )
-
-    session_id = doc["session_id"]
-    count = await chat_messages_collection.count_documents({"session_id": session_id})
-    msg = {
-        "message_id": count + 1,
-        "session_id": session_id,
-        "role": "assistant",
-        "content": content,
-        "message_type": "analysis_summary",
-        "created_at": datetime.now(timezone.utc),
-    }
-    await chat_messages_collection.insert_one(msg)
-
-    return success_response({
-        "session_id": session_id,
-        "assistant_message": {
-            "message_id": msg["message_id"],
-            "role": "assistant",
-            "content": content,
-            "message_type": "analysis_summary",
-        },
-    })
+@router.post("/advise")
+async def advise(body: dict, user: dict = Depends(get_current_user)):
+    draft = body.get("draft", "")
+    question = body.get("question", "")
+    company = body.get("company", "")
+    result = await run_advise(draft=draft, question=question, company=company)
+    return success_response(result)

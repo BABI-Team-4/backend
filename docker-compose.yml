@@ -10,13 +10,6 @@ services:
     environment:
       MONGO_INITDB_DATABASE: cover_letter
 
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: cover-letter-chroma
-    ports:
-      - "8110:8000"
-    volumes:
-      - ../chroma_db:/chroma/chroma
 
 volumes:
   mongo_data:

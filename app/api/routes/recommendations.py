@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from app.api.deps import get_current_user
 from app.core.responses import AppError, success_response
 from app.db.connections import (
-    chat_sessions_collection,
+    user_essays_collection,
     plans_collection,
     recommendations_collection,
     usage_collection,
@@ -19,14 +19,14 @@ router = APIRouter(tags=["recommendations"])
 
 # --- 8-1: Create Recommendations ---
 
-@router.post("/chat/sessions/{session_id}/recommendations")
+@router.post("/essays/{session_id}/recommendations")
 async def create_recommendations(
     session_id: str, body: RecommendationRequest, user: dict = Depends(get_current_user)
 ):
     user_id = str(user["_id"])
-    session = await chat_sessions_collection.find_one({"_id": ObjectId(session_id), "user_id": user_id})
+    session = await user_essays_collection.find_one({"_id": ObjectId(session_id), "user_id": user_id})
     if not session:
-        raise AppError("SESSION_NOT_FOUND", "채팅 세션을 찾을 수 없습니다.", 404)
+        raise AppError("ESSAY_NOT_FOUND", "자소서를 찾을 수 없습니다.", 404)
 
     ctx = session.get("context", {})
     if not ctx.get("essay_answer"):

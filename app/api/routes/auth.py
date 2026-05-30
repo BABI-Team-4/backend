@@ -69,13 +69,14 @@ async def oauth_callback(provider: str, body: OAuthCallbackRequest):
 
     now = datetime.now(timezone.utc)
     if not user:
+        default_plan = "pro"
         user = {
             "email": email,
             "name": user_info.get("name", ""),
             "profile_image_url": user_info.get("picture", ""),
             "auth_provider": provider,
             "role": "user",
-            "plan": "free",
+            "plan": default_plan,
             "created_at": now,
         }
         result = await users_collection.insert_one(user)

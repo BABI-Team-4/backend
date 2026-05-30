@@ -19,10 +19,10 @@ companies_collection = mongo_db["companies"]
 job_roles_collection = mongo_db["job_roles"]
 job_postings_collection = mongo_db["job_postings"]
 
-chat_sessions_collection = mongo_db["chat_sessions"]
-chat_messages_collection = mongo_db["chat_messages"]
+user_essays_collection = mongo_db["user_essays"]
 
 analyses_collection = mongo_db["analyses"]
+advise_results_collection = mongo_db["advise_results"]
 recommendations_collection = mongo_db["recommendations"]
 
 usage_collection = mongo_db["usage"]

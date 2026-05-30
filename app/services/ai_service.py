@@ -99,6 +99,22 @@ async def run_analysis(
     }
 
 
+async def run_advise(
+    draft: str,
+    question: str,
+    company: str,
+) -> dict:
+    async with httpx.AsyncClient(timeout=120) as client:
+        res = await client.post(f"{AI_BASE_URL}/advise", json={
+            "draft": draft,
+            "question": question,
+            "company": company,
+        })
+        if res.status_code != 200 or not res.content:
+            raise Exception(f"AI advise failed: status={res.status_code}, body={res.text[:200]}")
+        return res.json()
+
+
 async def run_recommendation(
     draft: str,
     question: str,
@@ -108,44 +124,42 @@ async def run_recommendation(
     async with httpx.AsyncClient(timeout=120) as client:
         res = await client.post(f"{AI_BASE_URL}/retrieve", json={
             "query": f"{question}\n{draft}" if question else draft,
-            "n_results": limit * 3,
+            "n_results": limit,
         })
         data = res.json()
 
     results = data.get("results", [])
-    company_scores: dict[str, dict] = {}
-    for r in results:
-        comp = r.get("company", "")
-        if not comp or comp == company:
-            continue
-        if comp not in company_scores:
-            company_scores[comp] = {
-                "company_name": comp,
-                "job_role_name": r.get("role", ""),
-                "similarities": [],
-            }
-        company_scores[comp]["similarities"].append(r.get("similarity", 0))
-
-    ranked = sorted(
-        company_scores.values(),
-        key=lambda x: sum(x["similarities"]) / len(x["similarities"]),
-        reverse=True,
-    )[:limit]
 
     items = []
-    for rank, entry in enumerate(ranked, 1):
-        avg_sim = sum(entry["similarities"]) / len(entry["similarities"])
+    for rank, r in enumerate(results, 1):
         items.append({
             "rank": rank,
-            "company_id": None,
-            "company_name": entry["company_name"],
-            "job_role_id": None,
-            "job_role_name": entry["job_role_name"],
-            "fit_score": int(avg_sim * 100),
-            "reason": f"{entry['company_name']}의 합격 자소서와 유사도가 높습니다.",
-            "matched_keywords": [],
-            "missing_keywords": [],
-            "recommended_revision": "",
+            "essay_id": r.get("essay_id", 0),
+            "qna_id": r.get("qna_id", 0),
+            "company_name": r.get("company", ""),
+            "job_role_name": r.get("role", ""),
+            "fit_score": int(r.get("similarity", 0) * 100),
+            "question": r.get("question", ""),
+            "answer": r.get("answer", ""),
+            "year": r.get("year", ""),
+            "season": r.get("season", ""),
         })
 
     return items
+
+
+async def run_chat(
+    messages: list[dict],
+    essay_question: str = "",
+    essay_answer: str = "",
+    company: str = "",
+) -> str:
+    async with httpx.AsyncClient(timeout=60) as client:
+        res = await client.post(f"{AI_BASE_URL}/chat", json={
+            "messages": messages,
+            "essay_question": essay_question,
+            "essay_answer": essay_answer,
+            "company": company,
+        })
+        data = res.json()
+        return data.get("reply", "응답을 받지 못했습니다.")
