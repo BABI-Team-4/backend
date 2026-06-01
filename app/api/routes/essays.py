@@ -48,7 +48,9 @@ async def _resolve_context(ctx: dict) -> dict:
 def _default_context() -> dict:
     return {
         "target_company_id": None,
+        "target_company_name": "",
         "target_job_role_id": None,
+        "target_job_role_name": "",
         "job_posting_id": None,
         "essay_question": None,
         "essay_answer": None,
@@ -63,6 +65,10 @@ async def create_essay(body: CreateEssayRequest, user: dict = Depends(get_curren
     user_id = str(user["_id"])
     now = datetime.now(timezone.utc)
     context = _default_context()
+    if body.company:
+        context["target_company_name"] = body.company
+    if body.position:
+        context["target_job_role_name"] = body.position
 
     doc = {
         "user_id": user_id,

@@ -3,6 +3,8 @@ from pydantic import BaseModel
 
 class CreateEssayRequest(BaseModel):
     title: str = ""
+    company: str = ""
+    position: str = ""
 
 
 class SubmitEssayRequest(BaseModel):
