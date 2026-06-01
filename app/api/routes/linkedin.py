@@ -1,8 +1,10 @@
-import httpx
+import re
+from functools import lru_cache
+
+from ddgs import DDGS
 from fastapi import APIRouter, Query
 
-from app.core.config import settings
-from app.core.responses import AppError, success_response
+from app.core.responses import success_response
 
 router = APIRouter(tags=["linkedin"])
 
@@ -12,37 +14,32 @@ async def search_linkedin_profiles(
     company: str = Query(..., min_length=1),
     position: str = Query(""),
 ):
-    """Google Custom Search로 LinkedIn 현업자 프로필을 검색합니다."""
-    api_key = settings.google_custom_search_api_key
-    cx = settings.google_custom_search_cx
-    if not api_key or not cx:
-        raise AppError("CONFIG_ERROR", "Google Custom Search가 설정되지 않았습니다.", 500)
+    """DuckDuckGo 검색으로 LinkedIn 프로필을 반환합니다."""
+    import asyncio
 
-    query = f"{company} {position}".strip()
+    query = f"site:linkedin.com/in {company} {position}".strip()
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(
-            "https://www.googleapis.com/customsearch/v1",
-            params={
-                "key": api_key,
-                "cx": cx,
-                "q": query,
-                "num": 5,
-            },
-        )
+    def _search():
+        try:
+            return DDGS().text(query, max_results=3)
+        except Exception:
+            return []
 
-    if resp.status_code != 200:
-        raise AppError("SEARCH_ERROR", "LinkedIn 검색에 실패했습니다.", 502)
-
-    data = resp.json()
-    items = data.get("items", [])
+    results = await asyncio.to_thread(_search)
 
     profiles = []
-    for item in items:
+    for r in results:
+        link = r.get("href", "")
+        if "linkedin.com/in/" not in link:
+            continue
+
+        title = r.get("title", "")
+        title = re.sub(r"\s*[-–|].*LinkedIn.*$", "", title).strip()
+
         profiles.append({
-            "title": item.get("title", ""),
-            "link": item.get("link", ""),
-            "snippet": item.get("snippet", ""),
+            "title": title,
+            "link": link,
+            "snippet": r.get("body", ""),
         })
 
     return success_response(profiles)
