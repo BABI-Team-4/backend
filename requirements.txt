@@ -8,3 +8,4 @@ pydantic-settings
 PyJWT
 httpx
 bson
+bcrypt

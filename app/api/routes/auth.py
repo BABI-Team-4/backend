@@ -2,6 +2,7 @@ import secrets
 from datetime import datetime, timezone
 from urllib.parse import urlencode
 
+import bcrypt
 import httpx
 from fastapi import APIRouter
 
@@ -9,7 +10,7 @@ from app.core.auth import create_access_token, create_refresh_token, decode_toke
 from app.core.config import settings
 from app.core.responses import AppError, success_response
 from app.db.connections import refresh_tokens_collection, usage_collection, users_collection
-from app.schemas.auth import LogoutRequest, OAuthCallbackRequest, RefreshRequest
+from app.schemas.auth import LoginRequest, LogoutRequest, OAuthCallbackRequest, RefreshRequest, SignupRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -65,7 +66,11 @@ async def oauth_callback(provider: str, body: OAuthCallbackRequest):
         raise AppError("OAUTH_FAILED", f"OAuth 인증에 실패했습니다: {e}", 401)
 
     email = user_info["email"]
-    user = await users_collection.find_one({"email": email})
+    # OAuth 사용자는 provider별로 구분하여 조회
+    user = await users_collection.find_one({"email": email, "auth_provider": provider})
+    if not user:
+        # 기존 다른 provider로 가입한 동일 이메일이 있는지 확인
+        user = await users_collection.find_one({"email": email})
 
     now = datetime.now(timezone.utc)
     if not user:
@@ -138,6 +143,97 @@ async def logout(body: LogoutRequest):
     return success_response({"logged_out": True})
 
 
+@router.post("/signup")
+async def signup(body: SignupRequest):
+    existing = await users_collection.find_one({"email": body.email})
+    if existing:
+        raise AppError("DUPLICATE_EMAIL", "이미 가입된 이메일입니다.", 409)
+
+    if len(body.password) < 6:
+        raise AppError("VALIDATION_ERROR", "비밀번호는 6자 이상이어야 합니다.")
+
+    hashed = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
+    now = datetime.now(timezone.utc)
+    user = {
+        "email": body.email,
+        "name": body.name or body.email.split("@")[0],
+        "profile_image_url": "",
+        "auth_provider": "email",
+        "role": "user",
+        "plan": "pro",
+        "password_hash": hashed,
+        "created_at": now,
+    }
+    result = await users_collection.insert_one(user)
+    user["_id"] = result.inserted_id
+
+    await usage_collection.insert_one({
+        "user_id": str(user["_id"]),
+        "monthly_analysis_used": 0,
+        "monthly_recommendation_used": 0,
+        "reset_at": None,
+    })
+
+    user_id = str(user["_id"])
+    access_token = create_access_token(user_id)
+    refresh_token = create_refresh_token(user_id)
+
+    await refresh_tokens_collection.insert_one({
+        "user_id": user_id,
+        "token": refresh_token,
+        "created_at": now,
+    })
+
+    return success_response({
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "user": {
+            "user_id": user_id,
+            "email": user["email"],
+            "name": user["name"],
+            "profile_image_url": "",
+            "auth_provider": "email",
+            "role": user["role"],
+            "plan": user["plan"],
+        },
+    })
+
+
+@router.post("/login")
+async def email_login(body: LoginRequest):
+    user = await users_collection.find_one({"email": body.email})
+    if not user or not user.get("password_hash"):
+        raise AppError("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다.", 401)
+
+    if not bcrypt.checkpw(body.password.encode(), user["password_hash"].encode()):
+        raise AppError("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다.", 401)
+
+    user_id = str(user["_id"])
+    access_token = create_access_token(user_id)
+    refresh_token = create_refresh_token(user_id)
+
+    now = datetime.now(timezone.utc)
+    await refresh_tokens_collection.insert_one({
+        "user_id": user_id,
+        "token": refresh_token,
+        "created_at": now,
+    })
+
+    return success_response({
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "user": {
+            "user_id": user_id,
+            "email": user["email"],
+            "name": user["name"],
+            "profile_image_url": user.get("profile_image_url", ""),
+            "auth_provider": user["auth_provider"],
+            "role": user["role"],
+            "plan": user["plan"],
+        },
+    })
+
+
 @router.post("/dev-login")
 async def dev_login(body: dict):
     """
@@ -204,10 +300,15 @@ async def _exchange_oauth(provider: str, code: str, redirect_uri: str) -> dict:
                 "Authorization": f"Bearer {tokens['access_token']}"
             })
             info = resp2.json()
+            kakao_id = info.get("id")
             account = info.get("kakao_account", {})
             profile = account.get("profile", {})
+            email = account.get("email", "")
+            if not email:
+                # Kakao 이메일 동의 안 한 경우 고유 ID로 이메일 생성
+                email = f"kakao_{kakao_id}@kakao.user"
             return {
-                "email": account.get("email", ""),
+                "email": email,
                 "name": profile.get("nickname", ""),
                 "picture": profile.get("profile_image_url", ""),
             }
