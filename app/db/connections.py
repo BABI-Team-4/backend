@@ -27,3 +27,5 @@ recommendations_collection = mongo_db["recommendations"]
 
 usage_collection = mongo_db["usage"]
 plans_collection = mongo_db["plans"]
+
+essay_companies_collection = mongo_db["essay_companies"]
