@@ -17,7 +17,7 @@ async def search_linkedin_profiles(
     """DuckDuckGo 검색으로 LinkedIn 프로필을 반환합니다."""
     import asyncio
 
-    query = f"site:linkedin.com/in {company} {position}".strip()
+    query = f"site:kr.linkedin.com/in {company} {position}".strip()
 
     def _search():
         try:
