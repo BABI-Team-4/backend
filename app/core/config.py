@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 30
 
+    # Google Custom Search
+    google_custom_search_api_key: str = ""
+    google_custom_search_cx: str = ""
+
     # OAuth
     google_client_id: str = ""
     google_client_secret: str = ""
