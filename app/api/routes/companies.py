@@ -12,6 +12,15 @@ from app.db.connections import (
 
 router = APIRouter(tags=["companies"])
 
+@router.get("/supported-companies")
+async def list_supported_companies(keyword: str = Query("")):
+    from app.db.connections import essay_companies_collection
+    query: dict = {}
+    if keyword.strip():
+        query["name"] = {"$regex": keyword.strip(), "$options": "i"}
+    docs = await essay_companies_collection.find(query).sort("name", 1).to_list(200)
+    return success_response([d["name"] for d in docs])
+
 
 # --- Industries ---
 
