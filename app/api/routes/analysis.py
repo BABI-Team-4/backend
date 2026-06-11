@@ -32,14 +32,14 @@ async def create_analysis(session_id: str, body: AnalysisRequest, user: dict = D
     if not ctx.get("ready_for_analysis"):
         raise AppError("VALIDATION_ERROR", "분석에 필요한 정보가 부족합니다. 기업, 직무, 자기소개서를 모두 입력해주세요.")
 
-    # Check usage limits
+    # Check credit limits (1 analysis = 3 credits)
     plan_name = user.get("plan", "free")
     plan = await plans_collection.find_one({"plan": plan_name})
-    if plan and plan.get("analysis_limit", -1) != -1:
-        usage = await usage_collection.find_one({"user_id": user_id})
-        used = usage.get("monthly_analysis_used", 0) if usage else 0
-        if used >= plan["analysis_limit"]:
-            raise AppError("USAGE_LIMIT_EXCEEDED", "이번 달 분석 횟수를 초과했습니다.")
+    credits_limit = plan.get("credits_limit", 9) if plan else 9
+    usage = await usage_collection.find_one({"user_id": user_id})
+    credits_used = usage.get("monthly_credits_used", 0) if usage else 0
+    if credits_used + 3 > credits_limit:
+        raise AppError("USAGE_LIMIT_EXCEEDED", "크레딧이 부족합니다. 추가 크레딧을 구매하거나 플랜을 업그레이드해주세요.")
 
     now = datetime.now(timezone.utc)
     analysis_doc = {
@@ -86,10 +86,10 @@ async def create_analysis(session_id: str, body: AnalysisRequest, user: dict = D
             }},
         )
 
-        # Increment usage
+        # Deduct 3 credits (첨삭 분석 + AI 수정본 + 유사 합격 자소서 매칭)
         await usage_collection.update_one(
             {"user_id": user_id},
-            {"$inc": {"monthly_analysis_used": 1}},
+            {"$inc": {"monthly_credits_used": 3}},
             upsert=True,
         )
 

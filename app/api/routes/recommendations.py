@@ -6,10 +6,9 @@ from fastapi import APIRouter, Depends
 from app.api.deps import get_current_user
 from app.core.responses import AppError, success_response
 from app.db.connections import (
+    advise_results_collection,
     user_essays_collection,
-    plans_collection,
     recommendations_collection,
-    usage_collection,
 )
 from app.schemas.recommendation import RecommendationRequest
 from app.services.ai_service import run_recommendation
@@ -29,21 +28,36 @@ async def create_recommendations(
         raise AppError("ESSAY_NOT_FOUND", "자소서를 찾을 수 없습니다.", 404)
 
     ctx = session.get("context", {})
-    if not ctx.get("essay_answer"):
+    essay_answer = ctx.get("essay_answer") or ""
+    essay_question = ctx.get("essay_question") or ""
+
+    # context에 essay_answer가 없으면 advise_results에서 모아서 사용
+    if not essay_answer:
+        advise_docs = await advise_results_collection.find(
+            {"session_id": session_id}
+        ).sort("question_index", 1).to_list(100)
+        if advise_docs:
+            parts = []
+            for d in advise_docs:
+                q = d.get("question", "")
+                # result 안의 원본 답변 또는 question 텍스트
+                r = d.get("result", {})
+                original = r.get("original", "") if isinstance(r, dict) else ""
+                if q:
+                    parts.append(q)
+                if original:
+                    parts.append(original)
+            essay_answer = "\n".join(parts)
+            if not essay_question and advise_docs:
+                essay_question = advise_docs[0].get("question", "")
+
+    if not essay_answer:
         raise AppError("VALIDATION_ERROR", "자기소개서 답변이 필요합니다.")
 
-    # Check usage limits
-    plan_name = user.get("plan", "free")
-    plan = await plans_collection.find_one({"plan": plan_name})
-    if plan and plan.get("recommendation_limit", -1) != -1:
-        usage = await usage_collection.find_one({"user_id": user_id})
-        used = usage.get("monthly_recommendation_used", 0) if usage else 0
-        if used >= plan["recommendation_limit"]:
-            raise AppError("USAGE_LIMIT_EXCEEDED", "이번 달 추천 횟수를 초과했습니다.")
-
+    # 유사 자소서 검색은 무료 (크레딧 차감 없음)
     items = await run_recommendation(
-        draft=ctx["essay_answer"],
-        question=ctx.get("essay_question", ""),
+        draft=essay_answer,
+        question=essay_question,
         company=ctx.get("target_company_name", ""),
         limit=body.limit,
     )
@@ -56,12 +70,6 @@ async def create_recommendations(
         "created_at": now,
     }
     result = await recommendations_collection.insert_one(rec_doc)
-
-    await usage_collection.update_one(
-        {"user_id": user_id},
-        {"$inc": {"monthly_recommendation_used": 1}},
-        upsert=True,
-    )
 
     return success_response({
         "recommendation_id": str(result.inserted_id),

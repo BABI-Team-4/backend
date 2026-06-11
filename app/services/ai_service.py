@@ -60,7 +60,10 @@ async def run_analysis(
             "specificity": specificity,
         },
         "summary": {
-            "strength": "; ".join(pros) if pros else "강점 분석 데이터가 부족합니다.",
+            "strength": "; ".join(
+                p.get("point", p) if isinstance(p, dict) else str(p)
+                for p in pros
+            ) if pros else "강점 분석 데이터가 부족합니다.",
             "weakness": "; ".join(
                 c.get("reason", c.get("point", "")) if isinstance(c, dict) else str(c)
                 for c in cons[:2]

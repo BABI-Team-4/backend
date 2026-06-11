@@ -60,9 +60,9 @@ db.refresh_tokens.createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
 // Plans (seed data)
 db.createCollection("plans");
 db.plans.insertMany([
-  { plan: "free", name: "Free", price: 0, analysis_limit: 2, recommendation_limit: 3 },
-  { plan: "basic", name: "Basic", price: 10000, analysis_limit: -1, recommendation_limit: 10 },
-  { plan: "pro", name: "Pro", price: 20000, analysis_limit: -1, recommendation_limit: 10 },
+  { plan: "free", name: "Free", price: 0, credits_limit: 9, library_view_limit: 10 },
+  { plan: "basic", name: "Basic", price: 9900, credits_limit: 30, library_view_limit: 30 },
+  { plan: "pro", name: "Pro", price: 19900, credits_limit: 90, library_view_limit: -1 },
 ]);
 
 // Industries (seed data)
@@ -150,9 +150,9 @@ resetAt.setDate(1);
 resetAt.setHours(0, 0, 0, 0);
 
 db.usage.insertMany([
-  { user_id: testUser._id.toString(), plan: "free", monthly_analysis_limit: 2, monthly_analysis_used: 0, monthly_recommendation_limit: 3, monthly_recommendation_used: 0, reset_at: resetAt },
-  { user_id: proUser._id.toString(), plan: "pro", monthly_analysis_limit: -1, monthly_analysis_used: 3, monthly_recommendation_limit: 10, monthly_recommendation_used: 1, reset_at: resetAt },
-  { user_id: adminUser._id.toString(), plan: "pro", monthly_analysis_limit: -1, monthly_analysis_used: 0, monthly_recommendation_limit: 10, monthly_recommendation_used: 0, reset_at: resetAt },
+  { user_id: testUser._id.toString(), plan: "free", monthly_credits_used: 0, monthly_library_view_used: 0, reset_at: resetAt },
+  { user_id: proUser._id.toString(), plan: "pro", monthly_credits_used: 6, monthly_library_view_used: 3, reset_at: resetAt },
+  { user_id: adminUser._id.toString(), plan: "pro", monthly_credits_used: 0, monthly_library_view_used: 0, reset_at: resetAt },
 ]);
 
 print("✅ cover_letter DB initialized with collections, indexes, seed data, and test users");

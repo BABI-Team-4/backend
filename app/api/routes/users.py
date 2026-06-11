@@ -43,8 +43,8 @@ async def get_usage(user: dict = Depends(get_current_user)):
     usage = await usage_collection.find_one({"user_id": user_id})
 
     plan_doc = await plans_collection.find_one({"plan": user.get("plan", "free")})
-    analysis_limit = plan_doc["analysis_limit"] if plan_doc else 2
-    recommendation_limit = plan_doc["recommendation_limit"] if plan_doc else 3
+    credits_limit = plan_doc.get("credits_limit", 9) if plan_doc else 9
+    library_view_limit = plan_doc.get("library_view_limit", 10) if plan_doc else 10
 
     now = datetime.now(timezone.utc)
     # Reset date = first day of next month
@@ -55,9 +55,9 @@ async def get_usage(user: dict = Depends(get_current_user)):
 
     return success_response({
         "plan": user.get("plan", "free"),
-        "monthly_analysis_limit": analysis_limit,
-        "monthly_analysis_used": usage.get("monthly_analysis_used", 0) if usage else 0,
-        "monthly_recommendation_limit": recommendation_limit,
-        "monthly_recommendation_used": usage.get("monthly_recommendation_used", 0) if usage else 0,
+        "monthly_credits_limit": credits_limit,
+        "monthly_credits_used": usage.get("monthly_credits_used", 0) if usage else 0,
+        "monthly_library_view_limit": library_view_limit,
+        "monthly_library_view_used": usage.get("monthly_library_view_used", 0) if usage else 0,
         "reset_at": reset_at.isoformat(),
     })

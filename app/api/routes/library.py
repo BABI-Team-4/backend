@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from app.api.deps import get_current_user
 from app.core.responses import success_response, AppError
-from app.db.connections import essays_collection, qna_collection
+from app.db.connections import essays_collection, plans_collection, qna_collection, usage_collection
 
 router = APIRouter(prefix="/library", tags=["library"])
 
@@ -99,11 +100,31 @@ async def list_essays(
 
 
 @router.get("/{essay_id}")
-async def get_essay_detail(essay_id: int):
-    """합격 자소서 상세 (문항 포함)"""
+async def get_essay_detail(essay_id: int, user: dict = Depends(get_current_user)):
+    """합격 자소서 상세 (문항 포함) — 열람 횟수 차감"""
+    user_id = str(user["_id"])
+
+    # Check library view limit
+    plan_name = user.get("plan", "free")
+    plan = await plans_collection.find_one({"plan": plan_name})
+    view_limit = plan.get("library_view_limit", 10) if plan else 10
+
+    if view_limit != -1:
+        usage = await usage_collection.find_one({"user_id": user_id})
+        view_used = usage.get("monthly_library_view_used", 0) if usage else 0
+        if view_used >= view_limit:
+            raise AppError("LIBRARY_VIEW_LIMIT_EXCEEDED", "이번 달 라이브러리 열람 한도를 초과했습니다. 플랜을 업그레이드해주세요.")
+
     doc = await essays_collection.find_one({"_id": essay_id})
     if not doc:
         raise AppError("ESSAY_NOT_FOUND", "해당 자소서를 찾을 수 없습니다.", 404)
+
+    # Increment library view count
+    await usage_collection.update_one(
+        {"user_id": user_id},
+        {"$inc": {"monthly_library_view_used": 1}},
+        upsert=True,
+    )
 
     qna_items = []
     async for q in qna_collection.find({"essay_id": essay_id, "is_valid": 1}):
